@@ -275,11 +275,14 @@ object Tree extends TreeRenderers with TreeEditors {
   /**
   *  The style of lines drawn between tree nodes.
   */
-  object LineStyle extends Enumeration("Angled", "None") {
-    val Angled, None = Value 
+  object LineStyle extends Enumeration {
+    val Angled = Value("Angled")
+    val None = Value("None")
     
+   
     // "Horizontal" is omitted; it does not display as expected, because of the hidden root; it only shows lines 
     // for the top level.
+    // val Horizontal = Value("Horizontal")
   }
   
   object SelectionMode extends Enumeration {
@@ -308,7 +311,7 @@ class Tree[A](private var treeDataModel: TreeModel[A] = TreeModel.empty[A])
 
   import Tree._  
 
-  def this(roots: Seq[A], children: A => Seq[A]) = this(new TreeModel(roots, children))
+  def this(roots: Seq[A], children: A => Seq[A]) = this(TreeModel(roots: _*)(children))
   
   override val companion = Tree
 
