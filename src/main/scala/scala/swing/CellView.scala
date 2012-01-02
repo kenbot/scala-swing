@@ -15,6 +15,7 @@ import collection._
 */
 trait CellView[+A] {
   this: Component =>
+    
   def editable: Boolean 
   def cellValues: Iterator[A]
   

@@ -35,13 +35,13 @@ trait EditableCellsCompanion {
     val companion: CellEditorCompanion
     def peer: companion.Peer
 
-    protected def fireCellEditingCancelled() {publish(CellEditingCancelled(CellEditor.this))}
-    protected def fireCellEditingStopped() {publish(CellEditingStopped(CellEditor.this))}
+    protected def fireCellEditingCancelled() { publish(CellEditingCancelled(CellEditor.this)) }
+    protected def fireCellEditingStopped() { publish(CellEditingStopped(CellEditor.this)) }
 
     protected def listenToPeer(p: JCellEditor) {
       p.addCellEditorListener(new CellEditorListener {
-        override def editingCanceled(e: ChangeEvent) {fireCellEditingCancelled()}
-        override def editingStopped(e: ChangeEvent) {fireCellEditingStopped()}
+        override def editingCanceled(e: ChangeEvent) { fireCellEditingCancelled() }
+        override def editingStopped(e: ChangeEvent) { fireCellEditingStopped() }
       })
     }
 

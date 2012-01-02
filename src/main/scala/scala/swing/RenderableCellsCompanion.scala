@@ -28,7 +28,7 @@ trait RenderableCellsCompanion {
   * specific renderer for a type, this renderer falls back to a renderer 
   * that renders the string returned from an item's <code>toString</code>.
   */
-  implicit val GenericRenderer: Renderer[Any] = Renderer.default[Any]
+  implicit val GenericRenderer: Renderer[Any] = Renderer.default
 
   /**
   * A default renderer implementation based on a Label.  
@@ -47,13 +47,14 @@ trait RenderableCellsCompanion {
     def default[A]: DefaultRenderer[A]
     
     /**
-    * Convenient default display of a tree node, which provides an Icon and label text for each item.
+    * Convenient default display of a cell node, which provides an Icon and label text for each item.
     */
     def labelled[A](f: A => (Icon, String)): DefaultRenderer[A]
     
     protected trait LabelRenderer[-A] extends CellRenderer[A] {
       this: DefaultRenderer[A] =>
       val convert: A => (Icon, String)
+      
       override abstract def componentFor(owner: Owner, a: A, info: companion.CellInfo): Component = {
         val c = super.componentFor(owner, a, info)
         val (labelIcon, labelText) = convert(a)
