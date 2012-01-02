@@ -223,8 +223,7 @@ object TreeDemo extends SimpleSwingApplication {
     
     size = (1024, 768): Dimension
   }
-  
-  
+
   object ExampleData {
     
     // File system icons

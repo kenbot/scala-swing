@@ -63,7 +63,7 @@ object ListView extends RenderableCellsCompanion {
      * </code>
      */
     def apply[A,B](f: A => B)(implicit renderer: Renderer[B]): Renderer[A] = new Renderer[A] {
-      def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = 
+      override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = 
         renderer.componentFor(list, f(a), cellInfo)                                  
     }
     
@@ -95,9 +95,7 @@ object ListView extends RenderableCellsCompanion {
         case c => c.peer
       }
     }
-    
-    
-    
+
     def peer: ListCellRenderer = new ListCellRenderer {
       def getListCellRendererComponent(list: JList, a: Any, index: Int, isSelected: Boolean, focused: Boolean) = {
         dispatchToScalaRenderer(list, a, index, isSelected, focused)
@@ -106,7 +104,9 @@ object ListView extends RenderableCellsCompanion {
     
     @deprecated("Override componentFor(list: List[_], a: A, cellInfo: CellInfo) instead.")
     def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int): Component = null
-    override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component
+    
+    override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = 
+        componentFor(list, cellInfo.isSelected, cellInfo.focused, a, cellInfo.index)
   }
   
   /**
@@ -143,7 +143,7 @@ object ListView extends RenderableCellsCompanion {
     /**
      * Configures the component before returning it.
      */
-    def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = {
+    override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = {
       preConfigure(list, cellInfo.isSelected, cellInfo.focused, a, cellInfo.index)
       configure(list, cellInfo.isSelected, cellInfo.focused, a, cellInfo.index)
       component
