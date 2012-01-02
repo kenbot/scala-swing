@@ -10,11 +10,15 @@
 
 package scala.swing
 
-import event._
+import scala.swing._
+import scala.swing.{ListView => _}
+import scala.swing.event._
 import javax.swing._
 import javax.swing.event._
 
-object ListView {
+object ListView extends RenderableCellsCompanion {
+  type Owner = ListView[_]
+
   /**
    * The supported modes of user selections.
    */
@@ -28,15 +32,19 @@ object ListView {
     override lazy val peer = c
   }
   
-  object Renderer {
+  object Renderer extends CellRendererCompanion {
+    type Peer = ListCellRenderer
+    case class CellInfo(isSelected: Boolean, focused: Boolean, index: Int)
+    object emptyCellInfo extends CellInfo(false, false, 0)
     def wrap[A](r: ListCellRenderer): Renderer[A] = new Wrapped[A](r)
     
     /**
      * Wrapper for <code>javax.swing.ListCellRenderer<code>s
      */
   	class Wrapped[A](override val peer: ListCellRenderer) extends Renderer[A] {
-  	  def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int) = {
-        Component.wrap(peer.getListCellRendererComponent(list.peer, a, index, isSelected, focused).asInstanceOf[JComponent])
+  	  override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo) = {
+        Component.wrap(peer.getListCellRendererComponent(list.peer, a, cellInfo.index, 
+            cellInfo.isSelected, cellInfo.focused).asInstanceOf[JComponent])
       }
   	}
    
@@ -55,10 +63,17 @@ object ListView {
      * </code>
      */
     def apply[A,B](f: A => B)(implicit renderer: Renderer[B]): Renderer[A] = new Renderer[A] {
-      def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int): Component = 
-        renderer.componentFor(list, isSelected, focused, f(a), index)                                  
+      def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = 
+        renderer.componentFor(list, f(a), cellInfo)                                  
     }
+    
+    def default[A] = new DefaultRenderer[A]
+
+    
+    def labelled[A](f: A => (Icon, String)) = new DefaultRenderer[A] with LabelRenderer[A] {val convert = f}
   }
+  
+  import Renderer.CellInfo
   
   /**
    * Item renderer for a list view. This is contravariant on the type of the 
@@ -68,12 +83,30 @@ object ListView {
    * 
    * @see javax.swing.ListCellRenderer
    */
-  abstract class Renderer[-A] {
-    def peer: ListCellRenderer = new ListCellRenderer {
-      def getListCellRendererComponent(list: JList, a: Any, index: Int, isSelected: Boolean, focused: Boolean) = 
-        componentFor(ListView.wrap[A](list), isSelected, focused, a.asInstanceOf[A], index).peer
+  trait Renderer[-A] extends CellRenderer[A] {
+    val companion = Renderer
+    
+    def dispatchToScalaRenderer(list: JList, a: Any, index: Int, isSelected: Boolean, focused: Boolean): JComponent = {
+      val wrappedList = ListView.wrap[A](list)
+      // Deal with deprecated method if necessary.
+      val comp = componentFor(wrappedList, isSelected, focused, a.asInstanceOf[A], index)
+      comp match {
+        case null => componentFor(wrappedList, a.asInstanceOf[A], CellInfo(isSelected, focused, index)).peer
+        case c => c.peer
+      }
     }
-    def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int): Component
+    
+    
+    
+    def peer: ListCellRenderer = new ListCellRenderer {
+      def getListCellRendererComponent(list: JList, a: Any, index: Int, isSelected: Boolean, focused: Boolean) = {
+        dispatchToScalaRenderer(list, a, index, isSelected, focused)
+      }
+    }
+    
+    @deprecated("Override componentFor(list: List[_], a: A, cellInfo: CellInfo) instead.")
+    def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int): Component = null
+    override def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component
   }
   
   /**
@@ -110,23 +143,31 @@ object ListView {
     /**
      * Configures the component before returning it.
      */
-    def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: A, index: Int): Component = {
-      preConfigure(list, isSelected, focused, a, index)
-      configure(list, isSelected, focused, a, index)
+    def componentFor(list: ListView[_], a: A, cellInfo: CellInfo): Component = {
+      preConfigure(list, cellInfo.isSelected, cellInfo.focused, a, cellInfo.index)
+      configure(list, cellInfo.isSelected, cellInfo.focused, a, cellInfo.index)
       component
     }
   }
   
   /**
-   * A generic renderer that uses Swing's built-in renderers. If there is no 
-   * specific renderer for a type, this renderer falls back to a renderer 
-   * that renders the string returned from an item's <code>toString</code>.
-   */
-  implicit object GenericRenderer extends Renderer[Any] {
-    override lazy val peer: ListCellRenderer = new DefaultListCellRenderer
-    def componentFor(list: ListView[_], isSelected: Boolean, focused: Boolean, a: Any, index: Int): Component = {
-      val c = peer.getListCellRendererComponent(list.peer, a, index, isSelected, focused).asInstanceOf[JComponent]
-      Component.wrap(c)
+  * Default label-based renderer for a ListView.
+  */
+  class DefaultRenderer[-A] extends Label with Renderer[A] { 
+    override lazy val peer = new javax.swing.DefaultListCellRenderer with SuperMixin { peerThis =>
+      override def getListCellRendererComponent(list: JList, value: AnyRef, index: Int, isSelected: Boolean, focused: Boolean): JComponent = {
+        dispatchToScalaRenderer(list, value, index, isSelected, focused)
+        peerThis
+      }
+      
+      def defaultRendererComponent(list: JList, value: AnyRef, index: Int, isSelected: Boolean, focused: Boolean) {
+        super.getListCellRendererComponent(list, value, index, isSelected, focused)
+      }
+    }
+
+    override def componentFor(list: ListView[_], value: A, info: Renderer.CellInfo): Component = {
+      peer.defaultRendererComponent(list.peer, value.asInstanceOf[AnyRef], info.index, info.isSelected, info.focused)
+      this
     }
   }
 }
@@ -140,9 +181,11 @@ object ListView {
  * 
  * @see javax.swing.JList
  */
-class ListView[A] extends Component {
+class ListView[A] extends Component with CellView[A] with RenderableCells[A] {
   import ListView._
   override lazy val peer: JList = new JList with SuperMixin
+  override val companion = ListView
+  
   
   def this(items: Seq[A]) = {
     this()
@@ -153,6 +196,10 @@ class ListView[A] extends Component {
     def getElementAt(n: Int) = items(n).asInstanceOf[AnyRef]
     def getSize = items.size
   }
+  
+  def cellValues = listData.iterator
+  
+  def editable = false
   
   def listData: Seq[A] = peer.getModel match {
     case model: ModelWrapper => model.items
@@ -177,24 +224,22 @@ class ListView[A] extends Component {
   /**
    * The current item selection.
    */
-  object selection extends Publisher {
-    protected abstract class Indices[A](a: =>Seq[A]) extends scala.collection.mutable.Set[A] { 
-      def -=(n: A): this.type 
-      def +=(n: A): this.type
-      def contains(n: A) = a.contains(n)
-      override def size = a.length
-      def iterator = a.iterator
-    }
-    
+  object selection extends CellSelection {
+  
+    @deprecated("Use SelectionSet[A] instead")
+    protected type Indices[A] = SelectionSet[A]
+
     def leadIndex: Int = peer.getSelectionModel.getLeadSelectionIndex
     def anchorIndex: Int = peer.getSelectionModel.getAnchorSelectionIndex
   
     /**
      * The indices of the currently selected items.
      */
-    object indices extends Indices(peer.getSelectedIndices) {
+    object indices extends SelectionSet(peer.getSelectedIndices) {
       def -=(n: Int): this.type = { peer.removeSelectionInterval(n,n); this }
       def +=(n: Int): this.type = { peer.addSelectionInterval(n,n); this }
+      def --=(nn: Seq[Int]) = { nn foreach -=; this }
+      def ++=(nn: Seq[Int]) = { nn foreach +=; this }
       @deprecated("Use ListView.selection.leadIndex")
       def leadIndex: Int = peer.getSelectionModel.getLeadSelectionIndex
       @deprecated("Use ListView.selection.anchorIndex")
@@ -224,6 +269,10 @@ class ListView[A] extends Component {
       }
     })
 
+    def cellValues = items.iterator
+    def count = items.size
+    def empty = items.isEmpty
+    
     def adjusting = peer.getSelectionModel.getValueIsAdjusting
   }
   
@@ -249,6 +298,6 @@ class ListView[A] extends Component {
   peer.getModel.addListDataListener(new ListDataListener {
     def contentsChanged(e: ListDataEvent) { publish(ListChanged(ListView.this)) }
     def intervalRemoved(e: ListDataEvent) { publish(ListElementsRemoved(ListView.this, e.getIndex0 to e.getIndex1)) }
-    def intervalAdded(e: ListDataEvent) { publish(ListElementsAdded(ListView.this, e.getIndex0 to e.getIndex1)) }
+    def intervalAdded(e: ListDataEvent) { publish(ListElementsAdded(ListView.this, e.getIndex0 to e.getIndex1)) } 
   })
 }

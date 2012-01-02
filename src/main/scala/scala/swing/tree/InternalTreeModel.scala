@@ -46,11 +46,7 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
     val array = nodePath.toArray(ClassManifest.Object)
     new jst.TreePath(array)
   }
-  
-  private implicit def enrichPeerNode(node: PeerNode) = new {
-    def userValue: A = node.getUserObject.asInstanceOf[A]
-  }
-  
+
   def treePathToPath(tp: jst.TreePath): Tree.Path[A] = {
     if (tp == null) null 
     else (tp.getPath map unpackNode).tail.toIndexedSeq
@@ -107,7 +103,7 @@ class InternalTreeModel[A] private (val peer: PeerModel) extends TreeModel[A] {
   def filter(p: A => Boolean): InternalTreeModel[A] = {
     def filterChildren(node: PeerNode): PeerNode = {
       val newNode = new PeerNode(node.getUserObject)
-      val okChildren = getNodeChildren(node).filter(n => p(n.userValue))
+      val okChildren = getNodeChildren(node) filter { n => p(unpackNode(n)) }
       okChildren map filterChildren foreach newNode.add
       newNode
     }
